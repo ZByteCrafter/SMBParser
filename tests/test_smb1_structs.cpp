@@ -33,6 +33,16 @@ TEST(Smb1StructsTest, NegotiateResponseSize) {
     EXPECT_EQ(sizeof(Smb1NegotiateResponse), 35u);
 }
 
+static_assert(sizeof(Smb1SessionSetupAndXRequest) == 27, "must be 27");
+static_assert(sizeof(Smb1TreeConnectAndXRequest) == 9, "must be 9");
+static_assert(sizeof(Smb1TreeConnectAndXResponse) == 7, "must be 7");
+static_assert(sizeof(Smb1NtCreateAndXResponse) == 69, "must be 69");
+static_assert(sizeof(Smb1ReadAndXResponse) == 25, "must be 25");
+static_assert(sizeof(Smb1ReadAndXRequest) == 25, "must be 25");
+static_assert(sizeof(Smb1WriteAndXRequest) == 29, "must be 29");
+static_assert(sizeof(Smb1WriteAndXResponse) == 13, "must be 13");
+static_assert(sizeof(Smb1CloseRequest) == 7, "must be 7");
+
 TEST(Smb1StructsTest, NegotiateResponseFieldValues) {
     uint8_t raw[] = {
         0x11,                      // WordCount = 17
