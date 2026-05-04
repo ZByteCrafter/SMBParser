@@ -1,0 +1,17 @@
+# Build
+build/
+cmake-build-*/
+out/
+
+# IDE
+.vs/
+.vscode/
+*.user
+*.suo
+
+# Superpowers
+.superpowers/
+
+# OS
+.DS_Store
+Thumbs.db
