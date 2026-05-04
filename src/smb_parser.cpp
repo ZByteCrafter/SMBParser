@@ -65,8 +65,8 @@ void SMBParser::processBuffer() {
                             | m_buffer[3];
             size_t total = 4 + nb_len;
             if (m_buffer.size() < total) return;
-            bool ok = tryParse(m_buffer.data() + 4, nb_len);
-            if (ok) {
+            size_t consumed = tryParse(m_buffer.data() + 4, nb_len);
+            if (consumed > 0) {
                 consumeFromBuffer(total);
             } else {
                 handleError();
@@ -78,9 +78,26 @@ void SMBParser::processBuffer() {
                 handleError();
                 continue;
             }
-            bool ok = tryParse(m_buffer.data(), m_buffer.size());
-            if (ok) {
-                consumeFromBuffer(m_buffer.size());
+            size_t consumed = tryParse(m_buffer.data(), m_buffer.size());
+            if (consumed > 0) {
+                // Consume exactly the parsed message bytes. If the returned size
+                // exceeds the buffer, fall back to scanning for the next SMB magic.
+                if (consumed <= m_buffer.size()) {
+                    consumeFromBuffer(consumed);
+                } else {
+                    // Scan for next magic as safety fallback
+                    const uint8_t mV1[4] = {0xFF, 'S', 'M', 'B'};
+                    const uint8_t mV2[4] = {0xFE, 'S', 'M', 'B'};
+                    size_t end = consumed;
+                    for (size_t i = 4; i + 4 <= m_buffer.size(); i++) {
+                        if (memcmp(m_buffer.data() + i, mV1, 4) == 0 ||
+                            memcmp(m_buffer.data() + i, mV2, 4) == 0) {
+                            end = i;
+                            break;
+                        }
+                    }
+                    consumeFromBuffer(end);
+                }
             } else {
                 handleError();
             }
@@ -88,8 +105,8 @@ void SMBParser::processBuffer() {
     }
 }
 
-bool SMBParser::tryParse(const uint8_t* data, size_t len) {
-    if (len < 4) return false;
+size_t SMBParser::tryParse(const uint8_t* data, size_t len) {
+    if (len < 4) return 0;
 
     if (data[0] == 0xFF && data[1] == 'S' && data[2] == 'M' && data[3] == 'B') {
         SMBv1Packet pkt(data, len);
@@ -97,24 +114,71 @@ bool SMBParser::tryParse(const uint8_t* data, size_t len) {
             m_packet_storage.emplace_back(data, data + len);
             const auto& stored = m_packet_storage.back();
             m_v1_messages.emplace_back(stored.data(), stored.size());
-            return true;
-        }
-    } else if (data[0] == 0xFE && data[1] == 'S' && data[2] == 'M' && data[3] == 'B') {
-        SMBv2Packet pkt(data, len);
-        if (pkt.isValid()) {
-            m_packet_storage.emplace_back(data, data + len);
-            const auto& stored = m_packet_storage.back();
-            m_v2_messages.emplace_back(stored.data(), stored.size());
-            if (pkt.hasNextCommand()) {
-                size_t next = pkt.nextCommandOffset();
-                if (next > 0 && next < len) {
-                    tryParse(data + next, len - next);
+            // Return the exact SMBv1 message size
+            const Smb1Header* hdr = reinterpret_cast<const Smb1Header*>(data);
+            size_t wc_offset = sizeof(Smb1Header);
+            if (wc_offset < len) {
+                uint8_t word_count = data[wc_offset];
+                size_t param_end = wc_offset + 1 + static_cast<size_t>(word_count) * 2;
+                if (param_end + 2 <= len) {
+                    uint16_t byte_count = smb_le16toh(*reinterpret_cast<const uint16_t*>(data + param_end));
+                    return param_end + 2 + byte_count;
                 }
             }
-            return true;
+            return sizeof(Smb1Header); // fallback: at least the header
         }
+        return 0;
     }
-    return false;
+
+    if (data[0] == 0xFE && data[1] == 'S' && data[2] == 'M' && data[3] == 'B') {
+        // Use a loop for compounding instead of recursion
+        size_t total_consumed = 0;
+        size_t offset = 0;
+        while (offset < len) {
+            if (offset + 4 > len) break;
+            if (data[offset] != 0xFE || data[offset+1] != 'S' ||
+                data[offset+2] != 'M' || data[offset+3] != 'B') break;
+
+            SMBv2Packet pkt(data + offset, len - offset);
+            if (!pkt.isValid()) {
+                return (offset > 0) ? offset : 0; // return consumed so far, or 0 for first failure
+            }
+
+            m_packet_storage.emplace_back(data + offset, data + offset + (len - offset));
+            const auto& stored = m_packet_storage.back();
+            m_v2_messages.emplace_back(stored.data(), stored.size());
+
+            if (pkt.hasNextCommand()) {
+                size_t next = pkt.nextCommandOffset();
+                if (next > offset && next < len) {
+                    offset = next; // follow the compound chain
+                } else {
+                    total_consumed = len; // chain broken, consume all
+                    break;
+                }
+            } else {
+                // Last compound message: scan for next SMB magic after it, or consume all
+                size_t msg_end = offset + sizeof(Smb2Header);
+                const Smb2Header* hdr = reinterpret_cast<const Smb2Header*>(data + offset);
+                msg_end += smb_le16toh(hdr->structure_size); // at least the header's claimed size
+                // Scan for next magic in remaining data
+                const uint8_t mV1[4] = {0xFF, 'S', 'M', 'B'};
+                const uint8_t mV2[4] = {0xFE, 'S', 'M', 'B'};
+                total_consumed = len;
+                for (size_t i = msg_end; i + 4 <= len; i++) {
+                    if (memcmp(data + i, mV1, 4) == 0 ||
+                        memcmp(data + i, mV2, 4) == 0) {
+                        total_consumed = i;
+                        break;
+                    }
+                }
+                break;
+            }
+        }
+        return (total_consumed > 0) ? total_consumed : len;
+    }
+
+    return 0;
 }
 
 void SMBParser::handleError() {

@@ -142,8 +142,9 @@ struct Smb2ReadRequest {
 };
 
 struct Smb2ReadResponse {
-    uint16_t structure_size;
-    uint16_t data_offset;
+    uint16_t structure_size;     // 17
+    uint8_t  data_offset;        // from start of SMB2 header (MS-SMB2 2.2.21)
+    uint8_t  reserved;
     uint32_t data_length;
     uint32_t data_remaining;
     uint32_t reserved2;

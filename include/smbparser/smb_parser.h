@@ -43,7 +43,7 @@ private:
 
     bool detectTransport();
     void processBuffer();
-    bool tryParse(const uint8_t* data, size_t len);
+    size_t tryParse(const uint8_t* data, size_t len);
     void handleError();
     void consumeFromBuffer(size_t bytes);
 };

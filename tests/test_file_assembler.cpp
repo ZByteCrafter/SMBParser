@@ -27,7 +27,7 @@ static std::vector<uint8_t> makeV2ReadResponse(const uint8_t* data, size_t len) 
     h->protocol[0]=0xFE;h->protocol[1]='S';h->protocol[2]='M';h->protocol[3]='B';
     h->structure_size=64; h->command=SMB2_READ;
     auto* r = reinterpret_cast<Smb2ReadResponse*>(buf.data()+64);
-    r->structure_size=17; r->data_offset=17; r->data_length=static_cast<uint32_t>(len);
+    r->structure_size=17; r->data_offset=static_cast<uint8_t>(sizeof(Smb2Header) + sizeof(Smb2ReadResponse)); r->data_length=static_cast<uint32_t>(len);
     memcpy(buf.data()+64+17, data, len);
     return buf;
 }

@@ -75,8 +75,11 @@ void FileAssembler::processV2Message(const SMBv2Packet& pkt) {
             auto* rr = reinterpret_cast<const Smb2ReadResponse*>(params);
             uint32_t dlen = smb_le32toh(rr->data_length);
             uint8_t doff = rr->data_offset;
-            if (dlen > 0 && static_cast<size_t>(doff) + dlen <= psize) {
-                const uint8_t* data = params + doff;
+            // DataOffset is absolute from SMB2 header start (MS-SMB2 2.2.21)
+            const uint8_t* smb2_start = reinterpret_cast<const uint8_t*>(pkt.header());
+            size_t total_msg_size = sizeof(Smb2Header) + pkt.commandParamsSize();
+            if (dlen > 0 && static_cast<size_t>(doff) + dlen <= total_msg_size) {
+                const uint8_t* read_data = smb2_start + doff;
                 std::string key;
                 // try file_id from last READ request
                 if (!m_last_read_file_id.empty()) {
@@ -109,11 +112,11 @@ void FileAssembler::processV2Message(const SMBv2Packet& pkt) {
                 // anonymous
                 if (key.empty()) {
                     key = makeFileKeyV2(tree_id, "ANONYMOUS");
-                    ensureFileEntry(key);
-                    m_files[key].protocol = "SMBv2";
-                    m_files[key].tree_id = tree_id;
-                }
-                appendData(key, data, dlen);
+                ensureFileEntry(key);
+                m_files[key].protocol = "SMBv2";
+                m_files[key].tree_id = tree_id;
+            }
+            appendData(key, read_data, dlen);
             }
         }
         break;

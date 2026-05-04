@@ -66,7 +66,7 @@ static std::vector<uint8_t> buildFileTransferStream() {
     auto read1 = makeSMB2(0x0008, 4, sess_id, tid, 17 + chunk1.size());
     auto* rr1 = reinterpret_cast<Smb2ReadResponse*>(read1.data() + 64);
     rr1->structure_size = 17;
-    rr1->data_offset = 17;
+    rr1->data_offset = static_cast<uint8_t>(sizeof(Smb2Header) + sizeof(Smb2ReadResponse));
     rr1->data_length = static_cast<uint32_t>(chunk1.size());
     memcpy(read1.data() + 64 + 17, chunk1.data(), chunk1.size());
     wrap(read1);
@@ -75,7 +75,7 @@ static std::vector<uint8_t> buildFileTransferStream() {
     auto read2 = makeSMB2(0x0008, 5, sess_id, tid, 17 + chunk2.size());
     auto* rr2 = reinterpret_cast<Smb2ReadResponse*>(read2.data() + 64);
     rr2->structure_size = 17;
-    rr2->data_offset = 17;
+    rr2->data_offset = static_cast<uint8_t>(sizeof(Smb2Header) + sizeof(Smb2ReadResponse));
     rr2->data_length = static_cast<uint32_t>(chunk2.size());
     memcpy(read2.data() + 64 + 17, chunk2.data(), chunk2.size());
     wrap(read2);
