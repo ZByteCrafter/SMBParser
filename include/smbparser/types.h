@@ -3,6 +3,7 @@
 
 #include <cstdint>
 #include <cstdio>
+#include <string>
 
 #if defined(_MSC_VER)
 #  define PACKED_STRUCT_BEGIN __pragma(pack(push, 1))
@@ -25,18 +26,18 @@ namespace smbparser {
 #if SMB_BIG_ENDIAN
 #  if defined(_MSC_VER)
 #    include <cstdlib>
-inline uint16_t le16toh(uint16_t v) { return _byteswap_ushort(v); }
-inline uint32_t le32toh(uint32_t v) { return _byteswap_ulong(v); }
-inline uint64_t le64toh(uint64_t v) { return _byteswap_uint64(v); }
+inline uint16_t smb_le16toh(uint16_t v) { return _byteswap_ushort(v); }
+inline uint32_t smb_le32toh(uint32_t v) { return _byteswap_ulong(v); }
+inline uint64_t smb_le64toh(uint64_t v) { return _byteswap_uint64(v); }
 #  else
-inline uint16_t le16toh(uint16_t v) { return static_cast<uint16_t>((v >> 8) | (v << 8)); }
-inline uint32_t le32toh(uint32_t v) { return __builtin_bswap32(v); }
-inline uint64_t le64toh(uint64_t v) { return __builtin_bswap64(v); }
+inline uint16_t smb_le16toh(uint16_t v) { return static_cast<uint16_t>((v >> 8) | (v << 8)); }
+inline uint32_t smb_le32toh(uint32_t v) { return __builtin_bswap32(v); }
+inline uint64_t smb_le64toh(uint64_t v) { return __builtin_bswap64(v); }
 #  endif
 #else
-inline uint16_t le16toh(uint16_t v) { return v; }
-inline uint32_t le32toh(uint32_t v) { return v; }
-inline uint64_t le64toh(uint64_t v) { return v; }
+inline uint16_t smb_le16toh(uint16_t v) { return v; }
+inline uint32_t smb_le32toh(uint32_t v) { return v; }
+inline uint64_t smb_le64toh(uint64_t v) { return v; }
 #endif
 
 enum Smb1Command : uint8_t {
@@ -176,7 +177,7 @@ enum Smb2Dialect : uint16_t {
     SMB2_DIALECT_WILDCARD = 0x02FF,
 };
 
-inline const char* smb1_command_to_string(uint8_t cmd) {
+inline std::string smb1_command_to_string(uint8_t cmd) {
     switch (static_cast<Smb1Command>(cmd)) {
     case SMB_COM_CREATE_DIRECTORY:       return "SMB_COM_CREATE_DIRECTORY";
     case SMB_COM_DELETE_DIRECTORY:       return "SMB_COM_DELETE_DIRECTORY";
@@ -251,14 +252,14 @@ inline const char* smb1_command_to_string(uint8_t cmd) {
     case SMB_COM_WRITE_BULK:             return "SMB_COM_WRITE_BULK";
     case SMB_COM_WRITE_BULK_DATA:        return "SMB_COM_WRITE_BULK_DATA";
     default: {
-        static char buf[32];
+        char buf[32];
         snprintf(buf, sizeof(buf), "UNKNOWN_0x%X", cmd);
-        return buf;
+        return std::string(buf);
     }
     }
 }
 
-inline const char* smb2_command_to_string(uint16_t cmd) {
+inline std::string smb2_command_to_string(uint16_t cmd) {
     switch (static_cast<Smb2Command>(cmd)) {
     case SMB2_NEGOTIATE:       return "SMB2_NEGOTIATE";
     case SMB2_SESSION_SETUP:   return "SMB2_SESSION_SETUP";
@@ -280,14 +281,14 @@ inline const char* smb2_command_to_string(uint16_t cmd) {
     case SMB2_SET_INFO:        return "SMB2_SET_INFO";
     case SMB2_OPLOCK_BREAK:    return "SMB2_OPLOCK_BREAK";
     default: {
-        static char buf[32];
+        char buf[32];
         snprintf(buf, sizeof(buf), "UNKNOWN_0x%X", cmd);
-        return buf;
+        return std::string(buf);
     }
     }
 }
 
-inline const char* ntstatus_to_string(uint32_t status) {
+inline std::string ntstatus_to_string(uint32_t status) {
     switch (static_cast<NtStatus>(status)) {
     case STATUS_SUCCESS:                  return "STATUS_SUCCESS";
     case STATUS_PENDING:                  return "STATUS_PENDING";
@@ -318,14 +319,14 @@ inline const char* ntstatus_to_string(uint32_t status) {
     case STATUS_INSUFF_SERVER_RESOURCES:  return "STATUS_INSUFF_SERVER_RESOURCES";
     case STATUS_USER_SESSION_DELETED:     return "STATUS_USER_SESSION_DELETED";
     default: {
-        static char buf[32];
+        char buf[32];
         snprintf(buf, sizeof(buf), "NTSTATUS_0x%X", status);
-        return buf;
+        return std::string(buf);
     }
     }
 }
 
-inline const char* smb2_dialect_to_string(uint16_t dialect) {
+inline std::string smb2_dialect_to_string(uint16_t dialect) {
     switch (static_cast<Smb2Dialect>(dialect)) {
     case SMB2_DIALECT_202:      return "2.0.2";
     case SMB2_DIALECT_210:      return "2.1";
@@ -334,9 +335,9 @@ inline const char* smb2_dialect_to_string(uint16_t dialect) {
     case SMB2_DIALECT_311:      return "3.1.1";
     case SMB2_DIALECT_WILDCARD: return "WILDCARD";
     default: {
-        static char buf[32];
+        char buf[32];
         snprintf(buf, sizeof(buf), "UNKNOWN_0x%X", dialect);
-        return buf;
+        return std::string(buf);
     }
     }
 }

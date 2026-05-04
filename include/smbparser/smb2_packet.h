@@ -20,11 +20,11 @@ public:
     const Smb2Header* header() const {
         return reinterpret_cast<const Smb2Header*>(m_data);
     }
-    uint16_t command() const { return le16toh(header()->command); }
-    uint32_t status() const { return le32toh(header()->status); }
-    uint64_t messageId() const { return le64toh(header()->message_id); }
-    uint64_t sessionId() const { return le64toh(header()->session_id); }
-    uint32_t treeId() const { return le32toh(header()->tree_id); }
+    uint16_t command() const { return smb_le16toh(header()->command); }
+    uint32_t status() const { return smb_le32toh(header()->status); }
+    uint64_t messageId() const { return smb_le64toh(header()->message_id); }
+    uint64_t sessionId() const { return smb_le64toh(header()->session_id); }
+    uint32_t treeId() const { return smb_le32toh(header()->tree_id); }
 
     const void* commandParams() const { return m_data + sizeof(Smb2Header); }
     size_t commandParamsSize() const {
@@ -32,8 +32,8 @@ public:
         return m_length - sizeof(Smb2Header);
     }
 
-    bool hasNextCommand() const { return le32toh(header()->next_command) != 0; }
-    size_t nextCommandOffset() const { return le32toh(header()->next_command); }
+    bool hasNextCommand() const { return smb_le32toh(header()->next_command) != 0; }
+    size_t nextCommandOffset() const { return smb_le32toh(header()->next_command); }
 
     nlohmann::json toJson() const;
 

@@ -25,14 +25,14 @@ void FileAssembler::processV2Message(const SMBv2Packet& pkt) {
 
     if (psize < 2) return;
 
-    uint16_t structure_size = le16toh(*reinterpret_cast<const uint16_t*>(params));
+    uint16_t structure_size = smb_le16toh(*reinterpret_cast<const uint16_t*>(params));
 
     switch (cmd) {
     case SMB2_TREE_CONNECT:
         if (structure_size == 9 && psize >= sizeof(Smb2TreeConnectRequest)) {
             auto* req = reinterpret_cast<const Smb2TreeConnectRequest*>(params);
-            uint16_t poff = le16toh(req->path_offset);
-            uint16_t plen = le16toh(req->path_length);
+            uint16_t poff = smb_le16toh(req->path_offset);
+            uint16_t plen = smb_le16toh(req->path_length);
             if (poff + plen <= psize) {
                 const char* path = reinterpret_cast<const char*>(params) + poff;
                 m_tree_map[tree_id] = std::string(path, plen);
@@ -53,7 +53,7 @@ void FileAssembler::processV2Message(const SMBv2Packet& pkt) {
             FileInfo& info = m_files[key];
             info.tree_id = tree_id;
             info.file_id_hex = fid_str;
-            info.file_size = le64toh(cr->end_of_file);
+            info.file_size = smb_le64toh(cr->end_of_file);
             info.protocol = "SMBv2";
 
             std::map<uint32_t, std::string>::const_iterator sit = m_tree_map.find(tree_id);
@@ -73,7 +73,7 @@ void FileAssembler::processV2Message(const SMBv2Packet& pkt) {
         }
         else if (psize >= sizeof(Smb2ReadResponse) && structure_size == 17) {
             auto* rr = reinterpret_cast<const Smb2ReadResponse*>(params);
-            uint32_t dlen = le32toh(rr->data_length);
+            uint32_t dlen = smb_le32toh(rr->data_length);
             uint8_t doff = rr->data_offset;
             if (dlen > 0 && static_cast<size_t>(doff) + dlen <= psize) {
                 const uint8_t* data = params + doff;
@@ -121,8 +121,8 @@ void FileAssembler::processV2Message(const SMBv2Packet& pkt) {
     case SMB2_WRITE:
         if (psize >= sizeof(Smb2WriteRequest) && structure_size == 49) {
             auto* wr = reinterpret_cast<const Smb2WriteRequest*>(params);
-            uint32_t dlen = le32toh(wr->length);
-            uint16_t doff = le16toh(wr->data_offset);
+            uint32_t dlen = smb_le32toh(wr->length);
+            uint16_t doff = smb_le16toh(wr->data_offset);
             char fid_hex[33];
             for (int i = 0; i < 16; i++)
                 snprintf(fid_hex + i * 2, 3, "%02X", wr->file_id[i]);
@@ -188,7 +188,7 @@ void FileAssembler::processV1Message(const SMBv1Packet& pkt) {
 
     uint8_t cmd = pkt.command();
     const Smb1Header* hdr = pkt.header();
-    uint16_t tid = le16toh(hdr->tid);
+    uint16_t tid = smb_le16toh(hdr->tid);
     const uint8_t* param_ptr = static_cast<const uint8_t*>(pkt.paramBlock());
     const uint8_t* data_ptr = pkt.dataBlock();
     size_t data_size = pkt.dataBlockSize();
@@ -203,9 +203,15 @@ void FileAssembler::processV1Message(const SMBv1Packet& pkt) {
             if (resp->word_count == 3 && data_size > 0) {
                 size_t plen = 0;
                 while (plen < data_size && data_ptr[plen] != '\0') plen++;
-                std::string path(reinterpret_cast<const char*>(data_ptr), plen);
-                if (!path.empty())
-                    m_tree_map[tid] = path;
+                // Guard: if no null terminator found, use entire block but cap at reasonable size
+                if (plen == data_size && data_size > 1024) {
+                    plen = 0; // too large without terminator, skip
+                }
+                if (plen > 0) {
+                    std::string path(reinterpret_cast<const char*>(data_ptr), plen);
+                    if (!path.empty())
+                        m_tree_map[tid] = path;
+                }
             }
         }
         break;
@@ -214,13 +220,13 @@ void FileAssembler::processV1Message(const SMBv1Packet& pkt) {
         if (param_size >= sizeof(Smb1NtCreateAndXResponse)) {
             auto* resp = reinterpret_cast<const Smb1NtCreateAndXResponse*>(param_ptr);
             if (resp->word_count == 34 || resp->word_count == 42) {
-                uint16_t fid = le16toh(resp->fid);
+                uint16_t fid = smb_le16toh(resp->fid);
                 std::string key = makeFileKey(tid, fid);
                 ensureFileEntry(key);
                 FileInfo& info = m_files[key];
                 info.tree_id = tid;
                 info.fid = fid;
-                info.file_size = le64toh(resp->end_of_file);
+                info.file_size = smb_le64toh(resp->end_of_file);
                 info.protocol = "SMBv1";
 
                 std::map<uint32_t, std::string>::const_iterator sit = m_tree_map.find(tid);
@@ -234,8 +240,8 @@ void FileAssembler::processV1Message(const SMBv1Packet& pkt) {
         if (param_size >= sizeof(Smb1ReadAndXResponse)) {
             auto* resp = reinterpret_cast<const Smb1ReadAndXResponse*>(param_ptr);
             if (resp->word_count == 12) {
-                uint16_t dlen = le16toh(resp->data_length);
-                uint16_t doff = le16toh(resp->data_offset);
+                uint16_t dlen = smb_le16toh(resp->data_length);
+                uint16_t doff = smb_le16toh(resp->data_offset);
                 if (dlen > 0 && static_cast<size_t>(doff) + dlen <= data_size) {
                     const uint8_t* data = data_ptr + doff;
                     std::string key;
@@ -271,9 +277,9 @@ void FileAssembler::processV1Message(const SMBv1Packet& pkt) {
         if (param_size >= sizeof(Smb1WriteAndXRequest)) {
             auto* req = reinterpret_cast<const Smb1WriteAndXRequest*>(param_ptr);
             if (req->word_count == 14) {
-                uint16_t fid = le16toh(req->fid);
-                uint16_t dlen = le16toh(req->data_length);
-                uint16_t doff = le16toh(req->data_offset);
+                uint16_t fid = smb_le16toh(req->fid);
+                uint16_t dlen = smb_le16toh(req->data_length);
+                uint16_t doff = smb_le16toh(req->data_offset);
                 std::string key = makeFileKey(tid, fid);
                 ensureFileEntry(key);
                 FileInfo& info = m_files[key];
@@ -293,7 +299,7 @@ void FileAssembler::processV1Message(const SMBv1Packet& pkt) {
         if (param_size >= sizeof(Smb1CloseRequest)) {
             auto* req = reinterpret_cast<const Smb1CloseRequest*>(param_ptr);
             if (req->word_count == 3) {
-                uint16_t fid = le16toh(req->fid);
+                uint16_t fid = smb_le16toh(req->fid);
                 std::string key = makeFileKey(tid, fid);
                 ensureFileEntry(key);
                 m_files[key].fid = fid;

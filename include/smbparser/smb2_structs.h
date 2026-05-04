@@ -143,8 +143,7 @@ struct Smb2ReadRequest {
 
 struct Smb2ReadResponse {
     uint16_t structure_size;
-    uint8_t  data_offset;
-    uint8_t  reserved;
+    uint16_t data_offset;
     uint32_t data_length;
     uint32_t data_remaining;
     uint32_t reserved2;

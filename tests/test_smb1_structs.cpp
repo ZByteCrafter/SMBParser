@@ -81,8 +81,8 @@ TEST(Smb1StructsTest, NegotiateResponseFieldValues) {
     };
     const Smb1NegotiateResponse* resp = reinterpret_cast<const Smb1NegotiateResponse*>(raw);
     EXPECT_EQ(resp->word_count, 0x11);
-    EXPECT_EQ(le16toh(resp->dialect_index), 5);
+    EXPECT_EQ(smb_le16toh(resp->dialect_index), 5);
     EXPECT_EQ(resp->security_mode, 3);
-    EXPECT_EQ(le32toh(resp->max_buffer_size), 4096u);
-    EXPECT_EQ(le32toh(resp->capabilities), 0xD3u);
+    EXPECT_EQ(smb_le32toh(resp->max_buffer_size), 4096u);
+    EXPECT_EQ(smb_le32toh(resp->capabilities), 0xD3u);
 }

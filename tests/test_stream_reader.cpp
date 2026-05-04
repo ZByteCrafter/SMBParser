@@ -9,7 +9,7 @@ TEST(StreamReaderTest, ReadsUint16WithinBounds) {
     StreamReader reader(data, sizeof(data));
     uint16_t val;
     EXPECT_TRUE(reader.read(0, val));
-    EXPECT_EQ(val, le16toh(0x0102u));
+    EXPECT_EQ(val, smb_le16toh(0x0102u));
 }
 
 TEST(StreamReaderTest, ReadOutOfBoundsReturnsFalse) {
@@ -40,7 +40,7 @@ TEST(StreamReaderTest, ReadsUint32AtOffset) {
     StreamReader reader(data, sizeof(data));
     uint32_t val;
     EXPECT_TRUE(reader.read(2, val));
-    EXPECT_EQ(val, le32toh(0x01020304u));
+    EXPECT_EQ(val, smb_le32toh(0x01020304u));
 }
 
 TEST(StreamReaderTest, ReadsBytesPointer) {
