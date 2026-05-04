@@ -98,3 +98,16 @@ TEST(SMBv1PacketTest, DataBlockAccess) {
     EXPECT_NE(pkt.dataBlock(), nullptr);
     EXPECT_NE(pkt.paramBlock(), nullptr);
 }
+
+TEST(SMBv1PacketTest, ToJsonNegotiateHasParams) {
+    auto buf = makeNegotiateResponse();
+    // Fill negotiate response fields in param block
+    // WordCount at offset 32
+    // dialect_index at offset 33,34
+    buf[32 + 1 + 0] = 0x05; // dialect_index low byte
+    buf[32 + 1 + 2] = 0x03; // security_mode
+    SMBv1Packet pkt(buf.data(), buf.size());
+    auto j = pkt.toJson();
+    EXPECT_TRUE(j.contains("params"));
+    EXPECT_TRUE(j["params"].contains("dialect_index"));
+}
