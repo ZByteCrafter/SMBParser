@@ -169,6 +169,135 @@ struct Smb1CloseRequest {
     uint32_t last_write_time;
 };
 
+// SMB_COM_TRANSACTION (0x25) — WordCount=14+SetupCount
+struct Smb1TransactionRequest {
+    uint8_t  word_count; uint16_t total_param_count; uint16_t total_data_count;
+    uint16_t max_param_count; uint16_t max_data_count; uint8_t max_setup_count;
+    uint8_t  reserved; uint16_t flags; uint32_t timeout; uint16_t reserved2;
+    uint16_t param_count; uint16_t param_offset; uint16_t data_count;
+    uint16_t data_offset; uint8_t setup_count; uint8_t reserved3;
+};
+
+// SMB_COM_TRANSACTION2 (0x32) — WordCount=14+SetupCount
+struct Smb1Transaction2Request {
+    uint8_t  word_count; uint16_t total_param_count; uint16_t total_data_count;
+    uint16_t max_param_count; uint16_t max_data_count; uint8_t max_setup_count;
+    uint8_t  reserved; uint16_t flags; uint32_t timeout; uint16_t reserved2;
+    uint16_t param_count; uint16_t param_offset; uint16_t data_count;
+    uint16_t data_offset; uint8_t setup_count; uint8_t reserved3;
+};
+
+// SMB_COM_NT_TRANSACT (0xA0) — varies
+struct Smb1NtTransactRequest {
+    uint8_t  word_count; uint8_t max_setup_count; uint16_t reserved;
+    uint32_t total_param_count; uint32_t total_data_count;
+    uint32_t max_param_count; uint32_t max_data_count;
+    uint32_t param_count; uint32_t param_offset;
+    uint32_t data_count; uint32_t data_offset;
+    uint8_t  setup_count; uint16_t function;
+};
+
+// SMB_COM_ECHO (0x2B) — WordCount=1
+struct Smb1EchoRequest {
+    uint8_t  word_count; uint16_t echo_count;
+};
+
+// SMB_COM_LOGOFF_ANDX (0x74) — WordCount=2
+struct Smb1LogoffAndXRequest {
+    uint8_t  word_count; uint8_t andx_command; uint8_t andx_reserved; uint16_t andx_offset;
+};
+
+// SMB_COM_LOCKING_ANDX (0x24) — WordCount=8
+struct Smb1LockingAndXRequest {
+    uint8_t  word_count; uint8_t andx_command; uint8_t andx_reserved; uint16_t andx_offset;
+    uint16_t fid; uint8_t lock_type; uint8_t oplock_level; uint32_t timeout;
+    uint16_t number_of_unlocks; uint16_t number_of_locks;
+};
+
+// SMB_COM_OPEN_ANDX (0x2D) Response — WordCount=15
+struct Smb1OpenAndXResponse {
+    uint8_t  word_count; uint8_t andx_command; uint8_t andx_reserved; uint16_t andx_offset;
+    uint16_t fid; uint32_t file_attributes; uint64_t last_write_time;
+    uint32_t data_size; uint16_t granted_access; uint16_t resource_type;
+    uint16_t status_flags; uint8_t directory;
+};
+
+// SMB_COM_QUERY_INFORMATION (0x08) Response — WordCount=10
+struct Smb1QueryInformationResponse {
+    uint8_t  word_count; uint16_t file_attributes; uint32_t last_write_time;
+    uint32_t data_size; uint16_t reserved[5];
+};
+
+// SMB_COM_SET_INFORMATION (0x09) Request — WordCount=8
+struct Smb1SetInformationRequest {
+    uint8_t  word_count; uint16_t file_attributes; uint32_t last_write_time;
+    uint16_t reserved[5];
+};
+
+// SMB_COM_DELETE (0x06) Request — WordCount=1
+struct Smb1DeleteRequest {
+    uint8_t  word_count; uint16_t search_attributes;
+};
+
+// SMB_COM_RENAME (0x07) Request — WordCount=1
+struct Smb1RenameRequest {
+    uint8_t  word_count; uint16_t search_attributes;
+};
+
+// SMB_COM_FLUSH (0x05) Request — WordCount=1
+struct Smb1FlushRequest {
+    uint8_t  word_count; uint16_t fid;
+};
+
+// SMB_COM_IOCTL (0x27) Request — WordCount=4
+struct Smb1IoctlRequest {
+    uint8_t  word_count; uint16_t fid; uint32_t category; uint32_t function;
+};
+
+// SMB_COM_QUERY_INFORMATION2 (0x23) — WordCount=1
+struct Smb1QueryInformation2Request {
+    uint8_t  word_count; uint16_t fid;
+};
+
+// SMB_COM_SET_INFORMATION2 (0x22) — WordCount=7
+struct Smb1SetInformation2Request {
+    uint8_t  word_count; uint16_t fid; uint32_t creation_time;
+    uint32_t last_access_time; uint32_t last_write_time;
+};
+
+// SMB_COM_WRITE_AND_CLOSE (0x2C) — WordCount=6
+struct Smb1WriteAndCloseRequest {
+    uint8_t  word_count; uint16_t fid; uint32_t offset; uint32_t timeout;
+    uint16_t write_mode; uint16_t remaining; uint16_t data_length_high;
+    uint16_t data_length; uint16_t data_offset; uint32_t offset_high;
+};
+
+// SMB_COM_READ_RAW (0x1A) — WordCount=4
+struct Smb1ReadRawRequest {
+    uint8_t  word_count; uint16_t fid; uint32_t offset; uint16_t max_count;
+    uint16_t min_count; uint32_t timeout; uint16_t reserved;
+};
+
+// SMB_COM_WRITE_RAW (0x1D) — WordCount=6
+struct Smb1WriteRawRequest {
+    uint8_t  word_count; uint16_t fid; uint32_t total_bytes; uint16_t reserved;
+    uint32_t offset; uint32_t timeout; uint16_t write_mode; uint16_t remaining;
+    uint16_t data_length; uint16_t data_offset;
+};
+
+// SMB_COM_READ_MPX (0x1B) — WordCount=4
+struct Smb1ReadMpxRequest {
+    uint8_t  word_count; uint16_t fid; uint32_t offset; uint16_t max_count;
+    uint16_t min_count; uint32_t timeout; uint16_t reserved;
+};
+
+// SMB_COM_WRITE_MPX (0x1E) — WordCount=6
+struct Smb1WriteMpxRequest {
+    uint8_t  word_count; uint16_t fid; uint32_t total_bytes; uint16_t reserved;
+    uint32_t offset; uint32_t timeout; uint16_t write_mode; uint16_t remaining;
+    uint16_t data_length; uint16_t data_offset;
+};
+
 PACKED_STRUCT_END
 
 } // namespace smbparser
