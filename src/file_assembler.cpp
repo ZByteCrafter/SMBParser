@@ -245,8 +245,11 @@ void FileAssembler::processV1Message(const SMBv1Packet& pkt) {
             if (resp->word_count == 12) {
                 uint16_t dlen = smb_le16toh(resp->data_length);
                 uint16_t doff = smb_le16toh(resp->data_offset);
-                if (dlen > 0 && static_cast<size_t>(doff) + dlen <= data_size) {
-                    const uint8_t* data = data_ptr + doff;
+                // DataOffset is from SMB Header start (MS-CIFS 2.2.4.42.2)
+                const uint8_t* smb_start = reinterpret_cast<const uint8_t*>(pkt.header());
+                size_t total_size = static_cast<size_t>((data_ptr + data_size) - smb_start);
+                if (dlen > 0 && static_cast<size_t>(doff) + dlen <= total_size) {
+                    const uint8_t* data = smb_start + doff;
                     std::string key;
                     for (std::map<std::string, FileInfo>::iterator it = m_files.begin();
                          it != m_files.end(); ++it) {
@@ -283,6 +286,9 @@ void FileAssembler::processV1Message(const SMBv1Packet& pkt) {
                 uint16_t fid = smb_le16toh(req->fid);
                 uint16_t dlen = smb_le16toh(req->data_length);
                 uint16_t doff = smb_le16toh(req->data_offset);
+                // DataOffset is from SMB Header start (MS-CIFS 2.2.4.54.1)
+                const uint8_t* smb_start = reinterpret_cast<const uint8_t*>(pkt.header());
+                size_t total_size = static_cast<size_t>((data_ptr + data_size) - smb_start);
                 std::string key = makeFileKey(tid, fid);
                 ensureFileEntry(key);
                 FileInfo& info = m_files[key];
@@ -290,8 +296,8 @@ void FileAssembler::processV1Message(const SMBv1Packet& pkt) {
                 info.tree_id = tid;
                 info.protocol = "SMBv1";
 
-                if (dlen > 0 && static_cast<size_t>(doff) + dlen <= data_size) {
-                    const uint8_t* data = data_ptr + doff;
+                if (dlen > 0 && static_cast<size_t>(doff) + dlen <= total_size) {
+                    const uint8_t* data = smb_start + doff;
                     appendData(key, data, dlen);
                 }
             }
