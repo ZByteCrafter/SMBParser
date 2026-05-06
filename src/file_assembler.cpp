@@ -18,6 +18,9 @@ void FileAssembler::ensureFileEntry(const std::string& key) {
 void FileAssembler::processV2Message(const SMBv2Packet& pkt) {
     if (!pkt.isValid()) return;
 
+    // Skip encrypted messages (SMB 3.x encryption, SMB2_FLAGS_ENCRYPTED)
+    if (smb_le32toh(pkt.header()->flags) & 0x00000004) return;
+
     uint16_t cmd = pkt.command();
     size_t psize = pkt.commandParamsSize();
     const uint8_t* params = static_cast<const uint8_t*>(pkt.commandParams());
@@ -37,6 +40,11 @@ void FileAssembler::processV2Message(const SMBv2Packet& pkt) {
                 const char* path = reinterpret_cast<const char*>(params) + poff;
                 m_tree_map[tree_id] = std::string(path, plen);
             }
+        }
+        else if (structure_size == 16 && psize >= sizeof(Smb2TreeConnectResponse)) {
+            auto* resp = reinterpret_cast<const Smb2TreeConnectResponse*>(params);
+            // Response carries share_type and capabilities but not path.
+            // Mark tree as connected; path comes from the corresponding Request.
         }
         break;
 
@@ -126,6 +134,9 @@ void FileAssembler::processV2Message(const SMBv2Packet& pkt) {
             auto* wr = reinterpret_cast<const Smb2WriteRequest*>(params);
             uint32_t dlen = smb_le32toh(wr->length);
             uint16_t doff = smb_le16toh(wr->data_offset);
+            // DataOffset is from SMB2 header start (MS-SMB2 2.2.28)
+            const uint8_t* smb_start = reinterpret_cast<const uint8_t*>(pkt.header());
+            size_t total_size = sizeof(Smb2Header) + psize;
             char fid_hex[33];
             for (int i = 0; i < 16; i++)
                 snprintf(fid_hex + i * 2, 3, "%02X", wr->file_id[i]);
@@ -143,9 +154,9 @@ void FileAssembler::processV2Message(const SMBv2Packet& pkt) {
                 m_files[key].protocol = "SMBv2";
             }
 
-            if (dlen > 0 && static_cast<size_t>(doff) + dlen <= psize) {
-                const uint8_t* data = params + doff;
-                appendData(key, data, dlen);
+            if (dlen > 0 && static_cast<size_t>(doff) + dlen <= total_size) {
+                const uint8_t* write_data = smb_start + doff;
+                appendData(key, write_data, dlen);
             }
         }
         break;

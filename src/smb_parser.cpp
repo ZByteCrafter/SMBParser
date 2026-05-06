@@ -144,19 +144,26 @@ size_t SMBParser::tryParse(const uint8_t* data, size_t len) {
                 return (offset > 0) ? offset : 0; // return consumed so far, or 0 for first failure
             }
 
-            m_packet_storage.emplace_back(data + offset, data + offset + (len - offset));
-            const auto& stored = m_packet_storage.back();
-            m_v2_messages.emplace_back(stored.data(), stored.size());
-
             if (pkt.hasNextCommand()) {
                 size_t next = pkt.nextCommandOffset();
                 if (next > offset && next < len) {
+                    // Store only up to the next compound's start
+                    m_packet_storage.emplace_back(data + offset, data + next);
+                    const auto& stored = m_packet_storage.back();
+                    m_v2_messages.emplace_back(stored.data(), stored.size());
                     offset = next; // follow the compound chain
                 } else {
-                    total_consumed = len; // chain broken, consume all
+                    m_packet_storage.emplace_back(data + offset, data + len);
+                    const auto& stored = m_packet_storage.back();
+                    m_v2_messages.emplace_back(stored.data(), stored.size());
+                    total_consumed = len;
                     break;
                 }
             } else {
+                // Last compound: store to end of data
+                m_packet_storage.emplace_back(data + offset, data + len);
+                const auto& stored = m_packet_storage.back();
+                m_v2_messages.emplace_back(stored.data(), stored.size());
                 // Last compound message: scan for next SMB magic after it, or consume all
                 size_t msg_end = offset + sizeof(Smb2Header);
                 const Smb2Header* hdr = reinterpret_cast<const Smb2Header*>(data + offset);
