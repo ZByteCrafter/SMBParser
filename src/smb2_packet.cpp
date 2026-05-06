@@ -81,13 +81,23 @@ nlohmann::json SMBv2Packet::toJson() const {
             params["data_remaining"] = smb_le32toh(rr->data_remaining);
         }
     }
-    else if (cmd == SMB2_WRITE && psize >= sizeof(Smb2WriteRequest)) {
-        auto* wr = static_cast<const Smb2WriteRequest*>(commandParams());
-        params["length"] = smb_le32toh(wr->length);
-        params["offset"] = smb_le64toh(wr->offset);
-        char fid[33];
-        for (int i = 0; i < 16; i++) snprintf(fid + i*2, 3, "%02X", wr->file_id[i]);
-        params["file_id"] = fid;
+    else if (cmd == SMB2_WRITE && psize >= sizeof(Smb2WriteResponse)) {
+        auto* wr = static_cast<const Smb2WriteResponse*>(commandParams());
+        uint16_t ss = smb_le16toh(wr->structure_size);
+        if (ss == 49 && psize >= sizeof(Smb2WriteRequest)) {
+            // WRITE Request (structure_size == 49)
+            auto* req = static_cast<const Smb2WriteRequest*>(commandParams());
+            params["length"] = smb_le32toh(req->length);
+            params["offset"] = smb_le64toh(req->offset);
+            char fid[33];
+            for (int i = 0; i < 16; i++) snprintf(fid + i*2, 3, "%02X", req->file_id[i]);
+            params["file_id"] = fid;
+        }
+        else if (ss == 17) {
+            // WRITE Response (structure_size == 17)
+            params["count"] = smb_le32toh(wr->count);
+            params["remaining"] = smb_le32toh(wr->remaining);
+        }
     }
     else if (cmd == SMB2_CLOSE && psize >= sizeof(Smb2CloseResponse)) {
         auto* cr = static_cast<const Smb2CloseResponse*>(commandParams());

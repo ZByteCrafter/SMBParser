@@ -36,8 +36,11 @@ void FileAssembler::processV2Message(const SMBv2Packet& pkt) {
             auto* req = reinterpret_cast<const Smb2TreeConnectRequest*>(params);
             uint16_t poff = smb_le16toh(req->path_offset);
             uint16_t plen = smb_le16toh(req->path_length);
-            if (poff + plen <= psize) {
-                const char* path = reinterpret_cast<const char*>(params) + poff;
+            // path_offset is from the SMB2 header start (MS-SMB2 2.2.9)
+            const uint8_t* smb2_start = reinterpret_cast<const uint8_t*>(pkt.header());
+            size_t total_size = sizeof(Smb2Header) + psize;
+            if (poff > 0 && static_cast<size_t>(poff) + plen <= total_size) {
+                const char* path = reinterpret_cast<const char*>(smb2_start + poff);
                 m_tree_map[tree_id] = std::string(path, plen);
             }
         }
@@ -93,9 +96,10 @@ void FileAssembler::processV2Message(const SMBv2Packet& pkt) {
                 if (!m_last_read_file_id.empty()) {
                     std::map<std::string, std::string>::const_iterator it =
                         m_fileid_filename.find(m_last_read_file_id);
-                    if (it != m_fileid_filename.end())
+                    if (it != m_fileid_filename.end()) {
                         key = it->second;
-                    m_last_read_file_id.clear();
+                        m_last_read_file_id.clear();
+                    }
                 }
                 // fallback: match by tree_id
                 if (key.empty()) {
@@ -120,11 +124,11 @@ void FileAssembler::processV2Message(const SMBv2Packet& pkt) {
                 // anonymous
                 if (key.empty()) {
                     key = makeFileKeyV2(tree_id, "ANONYMOUS");
-                ensureFileEntry(key);
-                m_files[key].protocol = "SMBv2";
-                m_files[key].tree_id = tree_id;
-            }
-            appendData(key, read_data, dlen);
+                    ensureFileEntry(key);
+                    m_files[key].protocol = "SMBv2";
+                    m_files[key].tree_id = tree_id;
+                }
+                appendData(key, read_data, dlen);
             }
         }
         break;

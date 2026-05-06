@@ -81,3 +81,21 @@ TEST(FileAssemblerTest, MissingMetadataTolerant) {
     EXPECT_EQ(a.files().size(), 1u);
     EXPECT_EQ(a.files().begin()->second.bytes_read, 3u);
 }
+
+TEST(FileAssemblerTest, ReadResponseZeroLengthNoData) {
+    FileAssembler a;
+    // Build a READ response with data_length=0
+    std::vector<uint8_t> buf(64 + 17, 0);
+    auto* h = reinterpret_cast<Smb2Header*>(buf.data());
+    h->protocol[0]=0xFE;h->protocol[1]='S';h->protocol[2]='M';h->protocol[3]='B';
+    h->structure_size=64; h->command=SMB2_READ;
+    auto* r = reinterpret_cast<Smb2ReadResponse*>(buf.data()+64);
+    r->structure_size=17;
+    r->data_offset=0;
+    r->data_length=0; // zero length
+    SMBv2Packet rp(buf.data(), buf.size());
+    ASSERT_TRUE(rp.isValid());
+    a.processV2Message(rp);
+    // No file should be created for a zero-length read with no prior CREATE
+    EXPECT_EQ(a.files().size(), 0u);
+}

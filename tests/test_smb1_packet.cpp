@@ -111,3 +111,33 @@ TEST(SMBv1PacketTest, ToJsonNegotiateHasParams) {
     EXPECT_TRUE(j.contains("params"));
     EXPECT_TRUE(j["params"].contains("dialect_index"));
 }
+
+TEST(SMBv1PacketTest, UnalignedByteCountRead) {
+    // Build a packet with WordCount=1 (odd number of words),
+    // so param_end = 32 + 1 + 1*2 = 35 (odd offset for ByteCount)
+    std::vector<uint8_t> buf;
+    // Smb1Header (32 bytes)
+    buf.push_back(0xFF); buf.push_back('S'); buf.push_back('M'); buf.push_back('B');
+    buf.push_back(SMB_COM_ECHO); // command
+    buf.push_back(0x00); buf.push_back(0x00); buf.push_back(0x00); buf.push_back(0x00); // status
+    buf.push_back(0x00); buf.push_back(0x00); buf.push_back(0x00); // flags, flags2
+    buf.push_back(0x00); buf.push_back(0x00); // pid_high
+    for (int i = 0; i < 8; i++) buf.push_back(0x00); // signature
+    buf.push_back(0x00); buf.push_back(0x00); // reserved
+    buf.push_back(0x01); buf.push_back(0x00); // tid
+    buf.push_back(0x00); buf.push_back(0x00); // pid_low
+    buf.push_back(0x00); buf.push_back(0x00); // uid
+    buf.push_back(0x01); buf.push_back(0x00); // mid
+    // WordCount = 1
+    buf.push_back(0x01);
+    // 1 word (2 bytes) = echo_count
+    buf.push_back(0x03); buf.push_back(0x00);
+    // ByteCount = 4 (at odd offset 35) — small enough to fit in buffer
+    buf.push_back(0x04); buf.push_back(0x00);
+    // 4 bytes of data
+    buf.push_back(0xAA); buf.push_back(0xBB); buf.push_back(0xCC); buf.push_back(0xDD);
+
+    SMBv1Packet pkt(buf.data(), buf.size());
+    EXPECT_TRUE(pkt.isValid());
+    EXPECT_EQ(pkt.dataBlockSize(), 4u);
+}

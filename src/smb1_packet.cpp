@@ -32,7 +32,9 @@ SMBv1Packet::SMBv1Packet(const uint8_t* data, size_t length)
         return;
     }
 
-    uint16_t byte_count = smb_le16toh(*reinterpret_cast<const uint16_t*>(data + param_end));
+    uint16_t byte_count;
+    std::memcpy(&byte_count, data + param_end, sizeof(uint16_t));
+    byte_count = smb_le16toh(byte_count);
     size_t data_end = param_end + 2 + byte_count;
 
     if (data_end > length) {

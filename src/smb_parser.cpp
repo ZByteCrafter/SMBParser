@@ -40,8 +40,10 @@ bool SMBParser::detectTransport() {
                             | (static_cast<uint32_t>(m_buffer[i + 2]) << 8)
                             | m_buffer[i + 3];
             if (nb_len > 0 && nb_len <= 0x1FFFFF) {
-                uint8_t smb_byte = m_buffer[i + 4];
-                if (smb_byte == 0xFF || smb_byte == 0xFE) {
+                // Validate full 4-byte SMB magic, not just the first byte
+                const uint8_t* p = m_buffer.data() + i + 4;
+                if ((p[0] == 0xFF && p[1] == 'S' && p[2] == 'M' && p[3] == 'B') ||
+                    (p[0] == 0xFE && p[1] == 'S' && p[2] == 'M' && p[3] == 'B')) {
                     if (i > 0) {
                         m_errors++;
                         consumeFromBuffer(i);
@@ -111,21 +113,24 @@ size_t SMBParser::tryParse(const uint8_t* data, size_t len) {
     if (data[0] == 0xFF && data[1] == 'S' && data[2] == 'M' && data[3] == 'B') {
         SMBv1Packet pkt(data, len);
         if (pkt.isValid()) {
-            m_packet_storage.emplace_back(data, data + len);
-            const auto& stored = m_packet_storage.back();
-            m_v1_messages.emplace_back(stored.data(), stored.size());
-            // Return the exact SMBv1 message size
-            const Smb1Header* hdr = reinterpret_cast<const Smb1Header*>(data);
+            // Compute exact message size before storing
+            size_t exact_size = sizeof(Smb1Header);
             size_t wc_offset = sizeof(Smb1Header);
             if (wc_offset < len) {
                 uint8_t word_count = data[wc_offset];
                 size_t param_end = wc_offset + 1 + static_cast<size_t>(word_count) * 2;
                 if (param_end + 2 <= len) {
-                    uint16_t byte_count = smb_le16toh(*reinterpret_cast<const uint16_t*>(data + param_end));
-                    return param_end + 2 + byte_count;
+                    uint16_t byte_count;
+                    std::memcpy(&byte_count, data + param_end, sizeof(uint16_t));
+                    byte_count = smb_le16toh(byte_count);
+                    exact_size = param_end + 2 + byte_count;
                 }
             }
-            return sizeof(Smb1Header); // fallback: at least the header
+            // Store only the exact message bytes
+            m_packet_storage.emplace_back(data, data + exact_size);
+            const auto& stored = m_packet_storage.back();
+            m_v1_messages.emplace_back(stored.data(), stored.size());
+            return exact_size;
         }
         return 0;
     }
@@ -153,6 +158,7 @@ size_t SMBParser::tryParse(const uint8_t* data, size_t len) {
                     m_v2_messages.emplace_back(stored.data(), stored.size());
                     offset = next; // follow the compound chain
                 } else {
+                    // Invalid next_command — store all remaining as one packet
                     m_packet_storage.emplace_back(data + offset, data + len);
                     const auto& stored = m_packet_storage.back();
                     m_v2_messages.emplace_back(stored.data(), stored.size());
@@ -160,25 +166,23 @@ size_t SMBParser::tryParse(const uint8_t* data, size_t len) {
                     break;
                 }
             } else {
-                // Last compound: store to end of data
-                m_packet_storage.emplace_back(data + offset, data + len);
-                const auto& stored = m_packet_storage.back();
-                m_v2_messages.emplace_back(stored.data(), stored.size());
-                // Last compound message: scan for next SMB magic after it, or consume all
-                size_t msg_end = offset + sizeof(Smb2Header);
-                const Smb2Header* hdr = reinterpret_cast<const Smb2Header*>(data + offset);
-                msg_end += smb_le16toh(hdr->structure_size); // at least the header's claimed size
-                // Scan for next magic in remaining data
+                // Last compound: determine actual message boundary by scanning
                 const uint8_t mV1[4] = {0xFF, 'S', 'M', 'B'};
                 const uint8_t mV2[4] = {0xFE, 'S', 'M', 'B'};
-                total_consumed = len;
+                size_t msg_end = offset + sizeof(Smb2Header);
+                size_t actual_end = len;
                 for (size_t i = msg_end; i + 4 <= len; i++) {
                     if (memcmp(data + i, mV1, 4) == 0 ||
                         memcmp(data + i, mV2, 4) == 0) {
-                        total_consumed = i;
+                        actual_end = i;
                         break;
                     }
                 }
+                // Store only up to the actual message boundary
+                m_packet_storage.emplace_back(data + offset, data + actual_end);
+                const auto& stored = m_packet_storage.back();
+                m_v2_messages.emplace_back(stored.data(), stored.size());
+                total_consumed = actual_end;
                 break;
             }
         }
