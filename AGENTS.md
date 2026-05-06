@@ -69,11 +69,12 @@ Follow the existing TDD layers: `test_types.cpp` → `test_stream_reader.cpp` �
 
 - **Single-threaded only.** No locks, no atomics. The four to_string functions are now safe regardless.
 - **C++14** — no `std::optional`, `std::string_view`, `std::byte`, `std::span`.
-- **SMBv2 compounding** — `next_command` chain parsed with a **loop** (not recursion) to avoid stack overflow.
+- **SMBv2 compounding** — `next_command` chain parsed with a **loop** (not recursion) to avoid stack overflow. In `smb_parser.cpp`, intermediate compounds must be stored only up to `next_command` offset — NOT the entire buffer tail. See the two `emplace_back` paths in `tryParse`.
 - **DirectTCP message boundaries** — no explicit length field. Parser uses struct sizes + SMB magic scanning to determine where one message ends. `consumeFromBuffer` must use the exact consumed size returned by `tryParse`, never `m_buffer.size()`.
 - **NetBIOS mode** — expects 4-byte NBSS header (type=0x00 + 3-byte big-endian length).
 - **FileAssembler READ correlation** — SMBv2 READ response has no file_id. Assembler tracks `m_last_read_file_id` from the preceding READ request, falling back to tree_id match.
-- **`data_offset` interpretation** — BOTH SMBv1 and SMBv2 use absolute offset from the SMB header start. This is easy to get wrong and has caused bugs in both directions (treating as relative to data block, or relative to response struct). See `Smb2ReadResponse` (MS-SMB2 §2.2.21) and `Smb1ReadAndXResponse` (MS-CIFS §2.2.4.42.2). The code now uses `reinterpret_cast<const uint8_t*>(pkt.header()) + doff` consistently.
+- **`data_offset` interpretation** — BOTH SMBv1 and SMBv2 use absolute offset from the SMB header start. This is easy to get wrong and has caused bugs in both directions (treating as relative to data block, or relative to response struct). See `Smb2ReadResponse` (MS-SMB2 §2.2.21) and `Smb1ReadAndXResponse` (MS-CIFS §2.2.4.42.2). The code now uses `reinterpret_cast<const uint8_t*>(pkt.header()) + doff` consistently. **This applies to READ_ANDX, WRITE_ANDX, SMB2_READ, and SMB2_WRITE. Do not miss the WRITE paths.**
 - **`Smb2ReadResponse` struct layout** — `data_offset` is `uint8_t` (1 byte), followed by `uint8_t reserved`. Do NOT change it to `uint16_t` — the struct size stays 17 either way, but the field alignment shifts, `reserved` disappears, and all subsequent fields read wrong values. The correct layout is verified by `static_assert(sizeof(Smb2ReadResponse) == 17)`.
-- **No encryption support.** Encrypted packets are marked and skipped.
+- **SMB2_TREE_CONNECT** — `file_assembler.cpp` handles both Request (`structure_size==9`) and Response (`structure_size==16`). Adding new TREE_CONNECT logic must cover both paths; Response-only streams otherwise fail to populate `m_tree_map`.
+- **Encrypted packets** — `file_assembler.cpp:processV2Message` checks `SMB2_FLAGS_ENCRYPTED (0x04)` on entry and skips them. Do not remove this gate without adding decryption support.
 - **TRANSACT2/NT_TRANSACT** sub-commands parse the outer header but do not deeply parse sub-function parameters.
