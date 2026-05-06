@@ -70,9 +70,10 @@ Follow the existing TDD layers: `test_types.cpp` → `test_stream_reader.cpp` �
 - **Single-threaded only.** No locks, no atomics. The four to_string functions are now safe regardless.
 - **C++14** — no `std::optional`, `std::string_view`, `std::byte`, `std::span`.
 - **SMBv2 compounding** — `next_command` chain parsed with a **loop** (not recursion) to avoid stack overflow.
-- **DirectTCP message boundaries** — no explicit length field. Parser uses struct sizes + SMB magic scanning to determine where one message ends.
+- **DirectTCP message boundaries** — no explicit length field. Parser uses struct sizes + SMB magic scanning to determine where one message ends. `consumeFromBuffer` must use the exact consumed size returned by `tryParse`, never `m_buffer.size()`.
 - **NetBIOS mode** — expects 4-byte NBSS header (type=0x00 + 3-byte big-endian length).
 - **FileAssembler READ correlation** — SMBv2 READ response has no file_id. Assembler tracks `m_last_read_file_id` from the preceding READ request, falling back to tree_id match.
-- **Smb2ReadResponse::data_offset** is absolute from SMB2 header start (MS-SMB2 §2.2.21), not relative to response struct.
+- **`data_offset` interpretation** — BOTH SMBv1 and SMBv2 use absolute offset from the SMB header start. This is easy to get wrong and has caused bugs in both directions (treating as relative to data block, or relative to response struct). See `Smb2ReadResponse` (MS-SMB2 §2.2.21) and `Smb1ReadAndXResponse` (MS-CIFS §2.2.4.42.2). The code now uses `reinterpret_cast<const uint8_t*>(pkt.header()) + doff` consistently.
+- **`Smb2ReadResponse` struct layout** — `data_offset` is `uint8_t` (1 byte), followed by `uint8_t reserved`. Do NOT change it to `uint16_t` — the struct size stays 17 either way, but the field alignment shifts, `reserved` disappears, and all subsequent fields read wrong values. The correct layout is verified by `static_assert(sizeof(Smb2ReadResponse) == 17)`.
 - **No encryption support.** Encrypted packets are marked and skipped.
 - **TRANSACT2/NT_TRANSACT** sub-commands parse the outer header but do not deeply parse sub-function parameters.
